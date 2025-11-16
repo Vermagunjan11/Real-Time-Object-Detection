@@ -8,74 +8,130 @@ import io
 from web_client import send_jpeg_bytes
 from visual import draw_detections
 
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase, RTCConfiguration
+from streamlit_webrtc import (
+    webrtc_streamer,
+    VideoTransformerBase,
+    RTCConfiguration,
+    WebRtcMode,
+)
 
+# RTC configuration
 RTC_CONFIGURATION = RTCConfiguration(
     {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
 )
 
-st.set_page_config(page_title="Real-Time Object Detection")
+# ---------------------------------------------------------------
+# Streamlit Page Setup
+# ---------------------------------------------------------------
+st.set_page_config(page_title="Real-Time Object Detection", layout="centered")
 
-st.title("Real-Time Object Detection — Streamlit Frontend")
+st.title("🔍 Real-Time Object Detection — Streamlit Frontend")
 
-mode = st.radio("Choose Mode:", ["Snapshot", "Live"])
+st.markdown(
+    """
+### Choose mode:
+- **Snapshot:** capture a single image  
+- **Live:** webcam real-time detection  
+"""
+)
 
-conf_threshold = st.slider("Min Confidence (%)", 0, 100, 30)
+mode = st.radio("Mode", ["Snapshot", "Live"])
 
-# -------------- SNAPSHOT MODE ----------------
+# Sidebar settings
+with st.sidebar:
+    st.header("Settings")
+    conf_threshold = st.slider("Confidence Threshold (%)", 0, 100, 30)
+    st.write("Frames below this confidence will be filtered out.")
+
+
+# ----------------------------------------------------------------
+# SNAPSHOT MODE
+# ----------------------------------------------------------------
 if mode == "Snapshot":
-    img_file = st.camera_input("Capture Image")
+    st.subheader("📸 Snapshot Mode")
+    img_file = st.camera_input("Take a picture")
 
     if img_file is not None:
+        st.image(img_file, caption="Captured Image", use_column_width=True)
+
         bytes_data = img_file.getvalue()
 
-        st.image(bytes_data, caption="Captured")
+        with st.spinner("Sending to backend..."):
+            result = send_jpeg_bytes(bytes_data)
 
-        result = send_jpeg_bytes(bytes_data)
-        dets = result.get("detections", [])
+        detections = result.get("detections", [])
 
-        pil = Image.open(io.BytesIO(bytes_data)).convert("RGB")
-        frame = np.array(pil)[:, :, ::-1]
+        # Convert bytes to BGR image
+        pil_image = Image.open(io.BytesIO(bytes_data)).convert("RGB")
+        frame = np.array(pil_image)[:, :, ::-1]  # RGB → BGR
 
-        dets = [d for d in dets if d["score"] * 100 >= conf_threshold]
+        # Filter detections
+        detections = [d for d in detections if d["score"] * 100 >= conf_threshold]
 
-        annotated = draw_detections(frame, dets)
-        annotated = annotated[:, :, ::-1]
+        # Draw
+        annotated = draw_detections(frame, detections)
+        annotated = annotated[:, :, ::-1]  # BGR → RGB
 
-        st.image(annotated, caption="Detections")
-        st.json({"detections": dets})
+        st.image(annotated, caption="Detections", use_column_width=True)
+        st.json({"detections": detections})
 
 
-# -------------- LIVE MODE ----------------
+# ----------------------------------------------------------------
+# LIVE MODE (webcam)
+# ----------------------------------------------------------------
 else:
-    class Processor(VideoTransformerBase):
+    st.subheader("🎥 Live Webcam Detection")
+    st.write("Click **Start** to begin streaming.")
+
+    # Video processor for live mode
+    class LiveProcessor(VideoTransformerBase):
         def __init__(self):
             self.last = time.time()
             self.fps = 0
 
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
-            ret, jpg = cv2.imencode(".jpg", img)
-            data = send_jpeg_bytes(jpg.tobytes())
 
-            dets = data.get("detections", [])
+            # Convert to JPEG
+            ret, jpg = cv2.imencode(".jpg", img)
+            if not ret:
+                return img
+
+            # Send to backend
+            res = send_jpeg_bytes(jpg.tobytes())
+
+            # Process detections
+            dets = res.get("detections", [])
             dets = [d for d in dets if d["score"] * 100 >= conf_threshold]
 
+            # Draw detections
             img = draw_detections(img, dets)
 
+            # FPS calculation
             now = time.time()
-            self.fps = 0.9 * self.fps + 0.1 * (1/(now-self.last))
+            dt = now - self.last
+            if dt > 0:
+                self.fps = 0.9 * self.fps + 0.1 * (1 / dt)
             self.last = now
 
-            cv2.putText(img, f"FPS: {self.fps:.1f}", (10, img.shape[0]-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255,255,255), 2)
+            cv2.putText(
+                img,
+                f"FPS: {self.fps:.1f}",
+                (10, img.shape[0] - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 255, 255),
+                2,
+            )
+
             return img
 
+    # Start WebRTC streamer
     webrtc_streamer(
-        key="example",
-        mode="sendrecv",
+        key="object-detect",
+        mode=WebRtcMode.SENDRECV,  # ✔ FIXED Enum
         rtc_configuration=RTC_CONFIGURATION,
-        video_transformer_factory=Processor,
         media_stream_constraints={"video": True, "audio": False},
-        async_transform=True,
+        video_transformer_factory=LiveProcessor,
+        async_processing=True,  # ✔ FIXED (replaces deprecated async_transform)
     )
