@@ -1,29 +1,18 @@
 @echo off
-title Real-Time Object Detection Launcher
+cd /d "%~dp0"
 
-echo ==============================================
-echo       Starting Backend (FastAPI YOLO)...
-echo ==============================================
+echo Activating virtual environment...
+call .venv\Scripts\activate
+
+echo Starting Backend...
 start "" cmd /k "uvicorn backend:app --reload --port 8000"
-
-echo Waiting for backend to start...
 timeout /t 3 >nul
-
-echo Opening Backend Docs in Browser...
 start http://127.0.0.1:8000/docs
 
-echo ==============================================
-echo       Starting Streamlit Frontend...
-echo ==============================================
-start "" cmd /k "streamlit run streamlit_app.py"
-
-echo Waiting for Streamlit to start...
+echo Starting Streamlit frontend...
+start "" cmd /k "streamlit run streamlit_app.py --server.headless true"
 timeout /t 3 >nul
-
-echo Opening Streamlit App in Browser...
 start http://localhost:8501
 
-echo ==============================================
-echo        ALL SYSTEMS STARTED SUCCESSFULLY!
-echo ==============================================
+echo All systems started!
 pause
