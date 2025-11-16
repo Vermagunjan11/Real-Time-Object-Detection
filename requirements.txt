@@ -1,6 +1,8 @@
-streamlit>=1.18.0
-streamlit-webrtc>=0.43.0
+fastapi
+uvicorn[standard]
 opencv-python
 numpy
+streamlit
+streamlit-webrtc
+pillow
 requests
-Pillow
