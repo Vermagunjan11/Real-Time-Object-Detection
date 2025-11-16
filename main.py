@@ -114,9 +114,9 @@ while True:
     cv2.imshow("YOLOv4-Tiny (CPU)", frame)
 
     # Safe exit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
+    if cv2.waitKey(1) & 0xFF == ord('q'): 
         print("🛑 Exiting...")
         break
-
+    
 cap.release()
 cv2.destroyAllWindows()
