@@ -6,3 +6,5 @@ streamlit
 streamlit-webrtc
 pillow
 requests
+time
+counter
