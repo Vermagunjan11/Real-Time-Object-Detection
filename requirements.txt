@@ -1,0 +1,6 @@
+streamlit>=1.18.0
+streamlit-webrtc>=0.43.0
+opencv-python
+numpy
+requests
+Pillow
