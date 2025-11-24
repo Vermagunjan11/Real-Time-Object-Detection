@@ -60,7 +60,8 @@ if mode == "Snapshot":
     img_file = st.camera_input("Take a picture")
 
     if img_file is not None:
-        st.image(img_file, caption="Captured Image", use_column_width=True)
+        st.image(img_file, caption="Captured image", use_container_width=True)
+
 
         bytes_data = img_file.getvalue()
 
@@ -80,7 +81,8 @@ if mode == "Snapshot":
         annotated = draw_detections(frame, detections)
         annotated = annotated[:, :, ::-1]  # BGR → RGB
 
-        st.image(annotated, caption="Detections", use_column_width=True)
+        st.image(annotated, caption="Detections", use_container_width=True)
+
         st.json({"detections": detections})
 
 
@@ -134,11 +136,12 @@ else:
             return img
 
     # Start WebRTC
-    webrtc_streamer(
-        key="object-detect",
-        mode=WebRtcMode.SENDRECV,     # proper mode
-        rtc_configuration=RTC_CONFIGURATION,
-        media_stream_constraints={"video": True, "audio": False},
-        video_transformer_factory=LiveProcessor,
-        async_transform=False,        # IMPORTANT FIX
+    ctx = webrtc_streamer(
+    key="object-detect",
+    mode="sendrecv",
+    rtc_configuration=RTC_CONFIGURATION,
+    media_stream_constraints={"video": True, "audio": False},
+    video_processor_factory=BackendPoster,     # updated
+    async_processing=True,                     # updated
     )
+
