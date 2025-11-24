@@ -141,7 +141,7 @@ else:
     mode="sendrecv",
     rtc_configuration=RTC_CONFIGURATION,
     media_stream_constraints={"video": True, "audio": False},
-    video_processor_factory=BackendPoster,     # updated
+    video_processor_factory=LiveProcessor,     # correct class name
     async_processing=True,                     # updated
-    )
+)
 
