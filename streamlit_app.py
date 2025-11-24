@@ -5,7 +5,7 @@ import time
 from PIL import Image
 import io
 
-from web_client import send_jpeg_bytes
+from web_client import send_jpeg_bytes, set_backend_url
 from visual import draw_detections
 
 from streamlit_webrtc import (
@@ -40,6 +40,14 @@ mode = st.radio("Mode", ["Snapshot", "Live"])
 # Sidebar settings
 with st.sidebar:
     st.header("Settings")
+
+    # Backend URL (IMPORTANT)
+    backend_url = st.text_input("Backend URL", "http://localhost:8000")
+    st.caption("Make sure backend is running on this URL.")
+
+    # Send the URL to web_client.py
+    set_backend_url(backend_url)
+
     conf_threshold = st.slider("Confidence Threshold (%)", 0, 100, 30)
     st.write("Frames below this confidence will be filtered out.")
 
@@ -61,14 +69,14 @@ if mode == "Snapshot":
 
         detections = result.get("detections", [])
 
-        # Convert bytes to BGR image
+        # Convert bytes to image
         pil_image = Image.open(io.BytesIO(bytes_data)).convert("RGB")
         frame = np.array(pil_image)[:, :, ::-1]  # RGB → BGR
 
-        # Filter detections
+        # Apply confidence filter
         detections = [d for d in detections if d["score"] * 100 >= conf_threshold]
 
-        # Draw
+        # Draw detections
         annotated = draw_detections(frame, detections)
         annotated = annotated[:, :, ::-1]  # BGR → RGB
 
@@ -83,7 +91,6 @@ else:
     st.subheader("🎥 Live Webcam Detection")
     st.write("Click **Start** to begin streaming.")
 
-    # Video processor for live mode
     class LiveProcessor(VideoTransformerBase):
         def __init__(self):
             self.last = time.time()
@@ -92,7 +99,7 @@ else:
         def recv(self, frame):
             img = frame.to_ndarray(format="bgr24")
 
-            # Convert to JPEG
+            # Encode image to JPEG
             ret, jpg = cv2.imencode(".jpg", img)
             if not ret:
                 return img
@@ -100,14 +107,14 @@ else:
             # Send to backend
             res = send_jpeg_bytes(jpg.tobytes())
 
-            # Process detections
+            # Extract detections
             dets = res.get("detections", [])
             dets = [d for d in dets if d["score"] * 100 >= conf_threshold]
 
-            # Draw detections
+            # Draw boxes
             img = draw_detections(img, dets)
 
-            # FPS calculation
+            # FPS
             now = time.time()
             dt = now - self.last
             if dt > 0:
@@ -126,12 +133,12 @@ else:
 
             return img
 
-    # Start WebRTC streamer
+    # Start WebRTC
     webrtc_streamer(
         key="object-detect",
-        mode=WebRtcMode.SENDRECV,  # ✔ FIXED Enum
+        mode=WebRtcMode.SENDRECV,     # proper mode
         rtc_configuration=RTC_CONFIGURATION,
         media_stream_constraints={"video": True, "audio": False},
         video_transformer_factory=LiveProcessor,
-        async_processing=True,  # ✔ FIXED (replaces deprecated async_transform)
+        async_transform=False,        # IMPORTANT FIX
     )
